@@ -1,0 +1,12 @@
+# dependencies
+node_modules/
+
+# the learned scam-hash list (lives on the Railway volume, not in git)
+scam-hashes.json
+
+# local environment / secrets — never commit your token
+.env
+
+# logs and OS junk
+*.log
+.DS_Store
