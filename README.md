@@ -4,9 +4,10 @@ A Discord bot that automatically deletes reposted scam images (fake giveaways,
 crypto-casino screenshots, etc.). Mods teach it known scam images; it blocks any
 future image that looks close enough, even if recompressed or lightly cropped.
 
-It works by computing a **perceptual hash** (dHash) of every uploaded image and
-comparing it against a saved blocklist using Hamming distance — so near-identical
-variants still match, with a tunable tolerance.
+It works by auto-cropping away borders/letter-boxing, then computing a
+**perceptual hash** (DCT-based pHash) of every uploaded image and comparing it
+against a saved blocklist using Hamming distance — so recompressed, re-screenshotted,
+or differently-padded variants of the same scam still match, with a tunable tolerance.
 
 ---
 

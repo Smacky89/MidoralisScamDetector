@@ -35,27 +35,77 @@ const CONFIG = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// PERCEPTUAL HASHING (dHash, 64-bit)
+// PERCEPTUAL HASHING (pHash, 64-bit, DCT-based, with auto-crop)
 // ─────────────────────────────────────────────────────────────
-async function dHash(buffer) {
-  const W = 9, H = 8;
-  const { data } = await sharp(buffer)
+
+// Trim away uniform borders / letter-boxing before hashing, so the same
+// scam graphic still matches when re-screenshotted with different padding.
+async function autoCrop(buffer) {
+  try {
+    return await sharp(buffer).trim({ threshold: 10 }).toBuffer();
+  } catch {
+    return buffer; // image was uniform / nothing to trim — use as-is
+  }
+}
+
+// 1D Discrete Cosine Transform (type II)
+function dct1d(vector) {
+  const N = vector.length;
+  const out = new Float64Array(N);
+  for (let k = 0; k < N; k++) {
+    let sum = 0;
+    for (let n = 0; n < N; n++) {
+      sum += vector[n] * Math.cos((Math.PI / N) * (n + 0.5) * k);
+    }
+    out[k] = sum;
+  }
+  return out;
+}
+
+async function perceptualHash(buffer) {
+  const SIZE = 32;
+  const cropped = await autoCrop(buffer);
+
+  const { data } = await sharp(cropped)
     .grayscale()
-    .resize(W, H, { fit: 'fill' })
+    .resize(SIZE, SIZE, { fit: 'fill' })
     .raw()
     .toBuffer({ resolveWithObject: true });
 
-  let bits = '';
-  for (let row = 0; row < H; row++) {
-    for (let col = 0; col < W - 1; col++) {
-      const left = data[row * W + col];
-      const right = data[row * W + col + 1];
-      bits += left < right ? '1' : '0';   // 64 bits total
-    }
+  // load into a 32x32 matrix
+  const matrix = [];
+  for (let y = 0; y < SIZE; y++) {
+    const row = new Float64Array(SIZE);
+    for (let x = 0; x < SIZE; x++) row[x] = data[y * SIZE + x];
+    matrix.push(row);
   }
+
+  // 2D DCT: transform rows, then columns
+  const rowDct = matrix.map(dct1d);
+  const dct = Array.from({ length: SIZE }, () => new Float64Array(SIZE));
+  for (let x = 0; x < SIZE; x++) {
+    const col = new Float64Array(SIZE);
+    for (let y = 0; y < SIZE; y++) col[y] = rowDct[y][x];
+    const colDct = dct1d(col);
+    for (let y = 0; y < SIZE; y++) dct[y][x] = colDct[y];
+  }
+
+  // keep the top-left 8x8 block (the low frequencies = overall structure)
+  const vals = [];
+  for (let y = 0; y < 8; y++)
+    for (let x = 0; x < 8; x++) vals.push(dct[y][x]);
+
+  // median of the coefficients (excluding the DC term, which dominates)
+  const sorted = vals.slice(1).sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+
+  // each bit: is this coefficient above the median?
+  let bits = '';
+  for (let i = 0; i < 64; i++) bits += vals[i] > median ? '1' : '0';
+
   // pack 64 bits into a 16-char hex string
   let hex = '';
-  for (let i = 0; i < bits.length; i += 4) {
+  for (let i = 0; i < 64; i += 4) {
     hex += parseInt(bits.slice(i, i + 4), 2).toString(16);
   }
   return hex;
@@ -175,7 +225,7 @@ client.on('messageCreate', async (msg) => {
       for (const att of images) {
         try {
           const buf = await fetchImageBuffer(att.url);
-          const hash = await dHash(buf);
+          const hash = await perceptualHash(buf);
           if (findMatch(hash)) { dupes++; continue; }   // already covered
           blocklist.push({
             hash,
@@ -226,7 +276,7 @@ client.on('messageCreate', async (msg) => {
   for (const att of images) {
     try {
       const buf = await fetchImageBuffer(att.url);
-      const hash = await dHash(buf);
+      const hash = await perceptualHash(buf);
       const match = findMatch(hash);
       if (!match) continue;
 
