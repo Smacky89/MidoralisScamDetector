@@ -379,6 +379,14 @@ client.on('messageCreate', async (msg) => {
   const images = [...msg.attachments.values()].filter(isImage);
   if (images.length === 0) return;
 
+  // Process each image; collect OCR signals across ALL images so multi-image
+  // scams (one message with several pictures) are still caught even if each
+  // individual image has only a few scam terms.
+  const ocrResults = [];           // { hash, termHits:Set, knownBad, unknownUrl }
+  const aggregateTerms = new Set();
+  let aggregateKnownBad = null;
+  let aggregateUnknownUrl = false;
+
   for (const att of images) {
     try {
       const buf = await fetchImageBuffer(att.url);
@@ -399,12 +407,13 @@ client.on('messageCreate', async (msg) => {
         const worker = await getOcrWorker();
         const { data: { text } } = await worker.recognize(buf);
         const { termHits, knownBad, unknownUrl } = scoreScamText(text);
+
+        // Per-image scam check (fast path: a single image is obviously scam)
         const isScam = !!knownBad ||
           termHits.length >= CONFIG.ocrScoreThreshold ||
           (termHits.length >= 2 && unknownUrl);
 
         if (isScam) {
-          // learn it so future reposts hit the fast hash check
           if (CONFIG.autoLearnFromOcr && !findMatch(hash)) {
             blocklist.push({
               hash,
@@ -422,9 +431,48 @@ client.on('messageCreate', async (msg) => {
           );
           return;
         }
+
+        // Not enough on its own — remember it for the aggregate check below.
+        ocrResults.push({ hash, termHits, knownBad, unknownUrl });
+        termHits.forEach((t) => aggregateTerms.add(t));
+        if (knownBad) aggregateKnownBad = knownBad;
+        if (unknownUrl) aggregateUnknownUrl = true;
       }
     } catch (e) {
       console.error('scan error:', e.message);
+    }
+  }
+
+  // 2c. Aggregate check across ALL images in this message.
+  // If a scammer spreads scam terms across multiple images, the totals will
+  // trip the threshold here even though no single image did.
+  if (CONFIG.enableOcr && ocrResults.length > 1) {
+    const totalTerms = [...aggregateTerms];
+    const isScam = !!aggregateKnownBad ||
+      totalTerms.length >= CONFIG.ocrScoreThreshold ||
+      (totalTerms.length >= 2 && aggregateUnknownUrl);
+
+    if (isScam) {
+      if (CONFIG.autoLearnFromOcr) {
+        for (const r of ocrResults) {
+          if (!findMatch(r.hash)) {
+            blocklist.push({
+              hash: r.hash,
+              addedBy: 'auto-ocr',
+              addedAt: new Date().toISOString(),
+              note: `OCR (multi-image): ${aggregateKnownBad || totalTerms.slice(0, 3).join(', ')}`,
+            });
+          }
+        }
+        await saveHashes();
+      }
+      await takeAction(
+        msg,
+        aggregateKnownBad
+          ? `scam link "${aggregateKnownBad}" found across ${ocrResults.length} images`
+          : `OCR scam signals across ${ocrResults.length} images (${totalTerms.slice(0, 4).join(', ')})`
+      );
+      return;
     }
   }
 });
