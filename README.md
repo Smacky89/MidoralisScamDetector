@@ -1,5 +1,8 @@
 # Scam Image Filter Bot
 
+> **Open-source project by [Midoralis](https://midoralis.com/).**
+> Free to use, modify, and share. Contributions welcome.
+
 A Discord bot that automatically removes scam content — fake giveaways,
 crypto-casino screenshots, phishing links, and the like.
 
@@ -54,7 +57,105 @@ Environment variables (never hard-code these):
 
 ---
 
-## Run locally
+## Installation — step by step
+
+Follow these steps if you've never set up a Discord bot before.
+
+### 1. Prerequisites
+
+- **Node.js 18 or newer** — download from [nodejs.org](https://nodejs.org/).
+  Verify with:
+  ```bash
+  node -v
+  npm -v
+  ```
+- **Git** (optional, only if you want to clone the repo) —
+  [git-scm.com](https://git-scm.com/).
+
+### 2. Get the code
+
+Either clone it:
+```bash
+git clone https://github.com/your-user/MidoralisScamDetector.git
+cd MidoralisScamDetector
+```
+…or download the ZIP from GitHub and extract it, then `cd` into the folder.
+
+### 3. Install dependencies
+
+```bash
+npm install
+```
+This installs `discord.js`, `sharp`, and `tesseract.js`.
+
+### 4. Create a Discord application + bot
+
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications).
+2. Click **New Application**, give it a name, and create it.
+3. Open the **Bot** tab → **Reset Token** → copy the token somewhere safe.
+   *(Treat this like a password — never commit it.)*
+4. Still on the **Bot** tab, scroll down and enable **Message Content Intent**.
+
+### 5. Invite the bot to your server
+
+1. In the Developer Portal go to **OAuth2 → URL Generator**.
+2. Under **Scopes**, tick `bot`.
+3. Under **Bot Permissions**, tick:
+   - Read Messages / View Channels
+   - Send Messages
+   - Manage Messages
+   - Read Message History
+4. Copy the generated URL, open it in a browser, and invite the bot to your
+   server.
+
+### 6. Add your token
+
+Set the `DISCORD_TOKEN` environment variable:
+
+**macOS / Linux:**
+```bash
+export DISCORD_TOKEN=your_token_here
+```
+
+**Windows (PowerShell):**
+```powershell
+$env:DISCORD_TOKEN="your_token_here"
+```
+
+**Windows (cmd):**
+```cmd
+set DISCORD_TOKEN=your_token_here
+```
+
+Optionally set `BLOCKLIST_PATH` to control where data is stored (defaults to
+`./scam-hashes.json` in the project folder).
+
+### 7. Start the bot
+
+```bash
+npm start
+```
+
+You should see something like:
+```
+Midoralis Scam Detector (open-source)
+Created by Midoralis — https://midoralis.com/
+Logged in as YourBot#1234
+```
+
+The bot is now live. The first time OCR runs it will download the English
+language data (a one-time, ~10 MB download) and cache it.
+
+### 8. Try it out
+
+In your server, as a mod:
+- Reply to a scam image with `!addscam` to teach it.
+- Run `!listscam` to see how many hashes and domains are loaded.
+- Post a known scam image again — the bot should delete it instantly.
+
+---
+
+## Run locally (short version)
 
 ```bash
 npm install
@@ -62,8 +163,7 @@ export DISCORD_TOKEN=your_token_here
 npm start
 ```
 
-Live once the logs show `Logged in as ...`. The first OCR check downloads the
-English language data once, then caches it.
+Live once the logs show `Logged in as ...`.
 
 ---
 
