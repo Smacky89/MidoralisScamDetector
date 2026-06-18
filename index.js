@@ -1,3 +1,10 @@
+// ─────────────────────────────────────────────────────────────
+// Midoralis Scam Detector
+// Open-source Discord scam detection bot.
+// Created by Midoralis — https://midoralis.com/
+// Free to use, modify, and redistribute.
+// ─────────────────────────────────────────────────────────────
+
 import {
   Client,
   GatewayIntentBits,
@@ -245,6 +252,10 @@ const client = new Client({
 
 client.once('clientReady', async () => {
   await loadAll();
+  console.log('────────────────────────────────────────────');
+  console.log('Midoralis Scam Detector (open-source)');
+  console.log('Created by Midoralis — https://midoralis.com/');
+  console.log('────────────────────────────────────────────');
   console.log(`Logged in as ${client.user.tag}`);
 });
 
